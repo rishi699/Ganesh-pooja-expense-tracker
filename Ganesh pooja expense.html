@@ -12,27 +12,27 @@
             background: linear-gradient(135deg, #f7fafc, #edf2f7); /* Light gradient background */
         }
         .container {
-            max-width: 1200px; /* Wider container for 3 columns */
+            max-width: 1200px;
         }
         .card {
             box-shadow: 0 10px 20px rgba(0,0,0,0.05);
-            border-radius: 1.5rem; /* More rounded corners */
+            border-radius: 1.5rem;
         }
         .title-gradient {
-            background: linear-gradient(45deg, #d97706, #facc15, #ef4444); /* Saffron, Gold, and Red */
+            background: linear-gradient(45deg, #d97706, #facc15, #ef4444);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             color: transparent;
         }
         .collection-gradient {
-            background: linear-gradient(45deg, #10b981, #34d399); /* Green */
+            background: linear-gradient(45deg, #10b981, #34d399);
         }
         .expense-gradient {
-            background: linear-gradient(45deg, #ef4444, #f87171); /* Red */
+            background: linear-gradient(45deg, #ef4444, #f87171);
         }
         .balance-gradient {
-            background: linear-gradient(45deg, #3b82f6, #60a5fa); /* Blue */
+            background: linear-gradient(45deg, #3b82f6, #60a5fa);
         }
         .btn {
             transition: transform 0.2s ease-in-out;
@@ -112,6 +112,7 @@
         <!-- Header Section -->
         <header class="text-center">
             <h1 class="text-5xl font-extrabold mb-2 title-gradient">Ganesh Pooja Tracker 🙏</h1>
+            <p id="userIdDisplay" class="text-xs text-gray-500 mt-2">Connecting to database...</p>
         </header>
 
         <!-- Summary Section -->
@@ -218,7 +219,7 @@
             <h3 class="text-2xl font-bold mb-4">Edit Entry</h3>
             <form id="editForm" class="space-y-4">
                 <input type="hidden" id="editType">
-                <input type="hidden" id="editIndex">
+                <input type="hidden" id="editDocId">
                 <!-- This input will be dynamic based on the type -->
                 <input type="text" id="editName" placeholder="Name/Item" required class="w-full">
                 <!-- This input will also be dynamic based on the type -->
@@ -231,278 +232,341 @@
         </div>
     </div>
 
-    <!-- JavaScript for functionality -->
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // --- State variables for collections, sponsors, and expenses ---
-            let collections = [];
-            let sponsors = [];
-            let expenses = [];
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-            // --- DOM Elements ---
-            const collectionForm = document.getElementById('collectionForm');
-            const collectionNameInput = document.getElementById('collectionName');
-            const collectionAmountInput = document.getElementById('collectionAmount');
-            const collectionsTableBody = document.querySelector('#collectionsTable tbody');
+        // --- Firebase Initialization ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        let userId = null;
+        let collectionsRef = null;
+        let expensesRef = null;
+        let sponsorsRef = null;
 
-            const sponsorForm = document.getElementById('sponsorForm');
-            const sponsorNameInput = document.getElementById('sponsorName');
-            const sponsorDetailsInput = document.getElementById('sponsorDetails'); // Updated ID
-            const sponsorsTableBody = document.querySelector('#sponsorsTable tbody');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const userIdDisplayEl = document.getElementById('userIdDisplay');
+        const loadingIndicator = document.getElementById('loadingIndicator');
 
-            const expenseForm = document.getElementById('expenseForm');
-            const expenseItemInput = document.getElementById('expenseItem');
-            const expenseAmountInput = document.getElementById('expenseAmount');
-            const expensesTableBody = document.querySelector('#expensesTable tbody');
+        // --- DOM Elements ---
+        const collectionForm = document.getElementById('collectionForm');
+        const collectionNameInput = document.getElementById('collectionName');
+        const collectionAmountInput = document.getElementById('collectionAmount');
+        const collectionsTableBody = document.querySelector('#collectionsTable tbody');
 
-            const totalCollectionEl = document.getElementById('totalCollection');
-            const totalExpensesEl = document.getElementById('totalExpenses');
-            const balanceEl = document.getElementById('balance');
+        const sponsorForm = document.getElementById('sponsorForm');
+        const sponsorNameInput = document.getElementById('sponsorName');
+        const sponsorDetailsInput = document.getElementById('sponsorDetails');
+        const sponsorsTableBody = document.querySelector('#sponsorsTable tbody');
 
-            const editModal = document.getElementById('editModal');
-            const editForm = document.getElementById('editForm');
-            const editTypeInput = document.getElementById('editType');
-            const editIndexInput = document.getElementById('editIndex');
-            const editNameInput = document.getElementById('editName');
-            const editDetailInput = document.getElementById('editDetail'); // Updated ID
-            const cancelEditBtn = document.getElementById('cancelEdit');
+        const expenseForm = document.getElementById('expenseForm');
+        const expenseItemInput = document.getElementById('expenseItem');
+        const expenseAmountInput = document.getElementById('expenseAmount');
+        const expensesTableBody = document.querySelector('#expensesTable tbody');
 
-            // --- Functions to manage data and UI ---
+        const totalCollectionEl = document.getElementById('totalCollection');
+        const totalExpensesEl = document.getElementById('totalExpenses');
+        const balanceEl = document.getElementById('balance');
 
-            /**
-             * Renders the collection items to the table.
-             */
-            const renderCollections = () => {
-                collectionsTableBody.innerHTML = ''; // Clear table
-                collections.forEach((item, index) => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${item.name}</td>
-                        <td class="font-medium text-green-600">₹${item.amount.toLocaleString()}</td>
-                        <td>
-                            <button class="edit-btn" data-index="${index}" data-type="collection">✏️</button>
-                            <button class="delete-btn" data-index="${index}" data-type="collection">❌</button>
-                        </td>
-                    `;
-                    collectionsTableBody.appendChild(row);
-                });
-            };
+        const editModal = document.getElementById('editModal');
+        const editForm = document.getElementById('editForm');
+        const editTypeInput = document.getElementById('editType');
+        const editDocIdInput = document.getElementById('editDocId');
+        const editNameInput = document.getElementById('editName');
+        const editDetailInput = document.getElementById('editDetail');
+        const cancelEditBtn = document.getElementById('cancelEdit');
 
-            /**
-             * Renders the sponsor items to the table.
-             */
-            const renderSponsors = () => {
-                sponsorsTableBody.innerHTML = ''; // Clear table
-                sponsors.forEach((item, index) => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${item.name}</td>
-                        <td class="font-medium text-gray-800">${item.detail}</td>
-                        <td>
-                            <button class="edit-btn" data-index="${index}" data-type="sponsor">✏️</button>
-                            <button class="delete-btn" data-index="${index}" data-type="sponsor">❌</button>
-                        </td>
-                    `;
-                    sponsorsTableBody.appendChild(row);
-                });
-            };
+        // --- Functions to manage data and UI ---
 
+        /**
+         * Renders the collection items to the table based on Firestore data.
+         * @param {Array} collections - An array of collection objects from Firestore.
+         */
+        const renderCollections = (collections) => {
+            collectionsTableBody.innerHTML = '';
+            collections.forEach((item) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.name}</td>
+                    <td class="font-medium text-green-600">₹${item.amount.toLocaleString()}</td>
+                    <td>
+                        <button class="edit-btn" data-doc-id="${item.id}" data-type="collection">✏️</button>
+                        <button class="delete-btn" data-doc-id="${item.id}" data-type="collection">❌</button>
+                    </td>
+                `;
+                collectionsTableBody.appendChild(row);
+            });
+        };
 
-            /**
-             * Renders the expense items to the table.
-             */
-            const renderExpenses = () => {
-                expensesTableBody.innerHTML = ''; // Clear table
-                expenses.forEach((item, index) => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${item.item}</td>
-                        <td class="font-medium text-red-600">₹${item.amount.toLocaleString()}</td>
-                        <td>
-                            <button class="edit-btn" data-index="${index}" data-type="expense">✏️</button>
-                            <button class="delete-btn" data-index="${index}" data-type="expense">❌</button>
-                        </td>
-                    `;
-                    expensesTableBody.appendChild(row);
-                });
-            };
+        /**
+         * Renders the sponsor items to the table based on Firestore data.
+         * @param {Array} sponsors - An array of sponsor objects from Firestore.
+         */
+        const renderSponsors = (sponsors) => {
+            sponsorsTableBody.innerHTML = '';
+            sponsors.forEach((item) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.name}</td>
+                    <td class="font-medium text-gray-800">${item.detail}</td>
+                    <td>
+                        <button class="edit-btn" data-doc-id="${item.id}" data-type="sponsor">✏️</button>
+                        <button class="delete-btn" data-doc-id="${item.id}" data-type="sponsor">❌</button>
+                    </td>
+                `;
+                sponsorsTableBody.appendChild(row);
+            });
+        };
 
-            /**
-             * Calculates and updates the summary totals (Collection, Expenses, Balance).
-             * NOTE: Sponsor amounts are no longer included in the calculation as they are now text.
-             */
-            const updateSummary = () => {
-                const totalCollections = collections.reduce((sum, item) => sum + item.amount, 0);
-                const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
-                const balance = totalCollections - totalExpenses;
+        /**
+         * Renders the expense items to the table based on Firestore data.
+         * @param {Array} expenses - An array of expense objects from Firestore.
+         */
+        const renderExpenses = (expenses) => {
+            expensesTableBody.innerHTML = '';
+            expenses.forEach((item) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.item}</td>
+                    <td class="font-medium text-red-600">₹${item.amount.toLocaleString()}</td>
+                    <td>
+                        <button class="edit-btn" data-doc-id="${item.id}" data-type="expense">✏️</button>
+                        <button class="delete-btn" data-doc-id="${item.id}" data-type="expense">❌</button>
+                    </td>
+                `;
+                expensesTableBody.appendChild(row);
+            });
+        };
 
-                totalCollectionEl.textContent = `₹${totalCollections.toLocaleString()}`;
-                totalExpensesEl.textContent = `₹${totalExpenses.toLocaleString()}`;
-                balanceEl.textContent = `₹${balance.toLocaleString()}`;
-            };
+        /**
+         * Calculates and updates the summary totals (Collection, Expenses, Balance).
+         * @param {Array} collections - An array of collection objects.
+         * @param {Array} expenses - An array of expense objects.
+         */
+        const updateSummary = (collections, expenses) => {
+            const totalCollections = collections.reduce((sum, item) => sum + item.amount, 0);
+            const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
+            const balance = totalCollections - totalExpenses;
 
-            /**
-             * Shows the edit modal with pre-populated data.
-             * @param {string} type - 'collection', 'sponsor' or 'expense'
-             * @param {number} index - The index of the item to edit
-             */
-            const showEditModal = (type, index) => {
-                editTypeInput.value = type;
-                editIndexInput.value = index;
+            totalCollectionEl.textContent = `₹${totalCollections.toLocaleString()}`;
+            totalExpensesEl.textContent = `₹${totalExpenses.toLocaleString()}`;
+            balanceEl.textContent = `₹${balance.toLocaleString()}`;
+        };
+
+        /**
+         * Shows the edit modal with pre-populated data.
+         * @param {string} type - 'collection', 'sponsor' or 'expense'
+         * @param {string} docId - The Firestore document ID of the item to edit.
+         */
+        const showEditModal = (type, docId) => {
+            editTypeInput.value = type;
+            editDocIdInput.value = docId;
+            
+            let item;
+            if (type === 'collection') {
+                item = collectionsData.find(c => c.id === docId);
+                editNameInput.value = item.name;
+                editDetailInput.value = item.amount;
+                editDetailInput.type = "number";
+                editDetailInput.placeholder = "Amount (₹)";
+            } else if (type === 'sponsor') {
+                item = sponsorsData.find(s => s.id === docId);
+                editNameInput.value = item.name;
+                editDetailInput.value = item.detail;
+                editDetailInput.type = "text";
+                editDetailInput.placeholder = "Contribution Details";
+            } else if (type === 'expense') {
+                item = expensesData.find(e => e.id === docId);
+                editNameInput.value = item.item;
+                editDetailInput.value = item.amount;
+                editDetailInput.type = "number";
+                editDetailInput.placeholder = "Amount (₹)";
+            }
+            editModal.style.display = 'flex';
+        };
+
+        /**
+         * Hides the edit modal.
+         */
+        const hideEditModal = () => {
+            editModal.style.display = 'none';
+            editForm.reset();
+        };
+
+        // --- Firebase Auth and Data Listeners ---
+        let collectionsData = [];
+        let expensesData = [];
+        let sponsorsData = [];
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                userIdDisplayEl.textContent = `User ID: ${userId}`;
                 
-                let item;
-                if (type === 'collection') {
-                    item = collections[index];
-                    editNameInput.value = item.name;
-                    editDetailInput.value = item.amount;
-                    editDetailInput.type = "number"; // Set type for numerical input
-                    editDetailInput.placeholder = "Amount (₹)";
-                } else if (type === 'sponsor') {
-                    item = sponsors[index];
-                    editNameInput.value = item.name;
-                    editDetailInput.value = item.detail;
-                    editDetailInput.type = "text"; // Set type for text input
-                    editDetailInput.placeholder = "Contribution Details";
+                // Define collections and set up real-time listeners
+                const userPath = `/artifacts/${appId}/users/${userId}`;
+                collectionsRef = collection(db, `${userPath}/collections`);
+                expensesRef = collection(db, `${userPath}/expenses`);
+                sponsorsRef = collection(db, `${userPath}/sponsors`);
+
+                // Real-time listener for collections
+                onSnapshot(collectionsRef, (snapshot) => {
+                    collectionsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderCollections(collectionsData);
+                    updateSummary(collectionsData, expensesData);
+                });
+
+                // Real-time listener for expenses
+                onSnapshot(expensesRef, (snapshot) => {
+                    expensesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderExpenses(expensesData);
+                    updateSummary(collectionsData, expensesData);
+                });
+
+                // Real-time listener for sponsors
+                onSnapshot(sponsorsRef, (snapshot) => {
+                    sponsorsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderSponsors(sponsorsData);
+                });
+
+            } else {
+                 // Sign in anonymously
+                try {
+                    const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                    if (token) {
+                        await signInWithCustomToken(auth, token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Firebase Auth Error:", error);
+                    userIdDisplayEl.textContent = `Auth Error: ${error.message}`;
                 }
-                else {
-                    item = expenses[index];
-                    editNameInput.value = item.item;
-                    editDetailInput.value = item.amount;
-                    editDetailInput.type = "number"; // Set type for numerical input
-                    editDetailInput.placeholder = "Amount (₹)";
-                }
-                editModal.style.display = 'flex';
-            };
+            }
+        });
 
-            /**
-             * Hides the edit modal.
-             */
-            const hideEditModal = () => {
-                editModal.style.display = 'none';
-                editForm.reset();
-            };
+        // --- Event Listeners ---
 
-            // --- Event Listeners ---
+        // Handle adding a new collection entry
+        collectionForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = collectionNameInput.value;
+            const amount = parseFloat(collectionAmountInput.value);
 
-            // Handle adding a new collection entry
-            collectionForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const name = collectionNameInput.value;
-                const amount = parseFloat(collectionAmountInput.value);
-
-                if (name && amount > 0) {
-                    collections.push({ name, amount });
+            if (name && amount > 0 && collectionsRef) {
+                try {
+                    await addDoc(collectionsRef, { name, amount });
                     collectionNameInput.value = '';
                     collectionAmountInput.value = '';
-                    renderCollections();
-                    updateSummary();
+                } catch (e) {
+                    console.error("Error adding document: ", e);
                 }
-            });
+            }
+        });
 
-            // Handle adding a new sponsor entry
-            sponsorForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const name = sponsorNameInput.value;
-                const detail = sponsorDetailsInput.value;
+        // Handle adding a new sponsor entry
+        sponsorForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = sponsorNameInput.value;
+            const detail = sponsorDetailsInput.value;
 
-                if (name && detail) {
-                    sponsors.push({ name, detail });
+            if (name && detail && sponsorsRef) {
+                try {
+                    await addDoc(sponsorsRef, { name, detail });
                     sponsorNameInput.value = '';
                     sponsorDetailsInput.value = '';
-                    renderSponsors();
-                    updateSummary();
+                } catch (e) {
+                    console.error("Error adding document: ", e);
                 }
-            });
+            }
+        });
 
-            // Handle adding a new expense entry
-            expenseForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const item = expenseItemInput.value;
-                const amount = parseFloat(expenseAmountInput.value);
+        // Handle adding a new expense entry
+        expenseForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const item = expenseItemInput.value;
+            const amount = parseFloat(expenseAmountInput.value);
 
-                if (item && amount > 0) {
-                    expenses.push({ item, amount });
+            if (item && amount > 0 && expensesRef) {
+                try {
+                    await addDoc(expensesRef, { item, amount });
                     expenseItemInput.value = '';
                     expenseAmountInput.value = '';
-                    renderExpenses();
-                    updateSummary();
+                } catch (e) {
+                    console.error("Error adding document: ", e);
                 }
-            });
-            
-            // Handle deleting or editing an item from any table
-            document.addEventListener('click', (e) => {
-                const target = e.target;
-                if (target.classList.contains('delete-btn')) {
-                    const index = parseInt(target.dataset.index);
-                    const type = target.dataset.type;
+            }
+        });
+        
+        // Handle deleting or editing an item from any table
+        document.addEventListener('click', async (e) => {
+            const target = e.target;
+            const docId = target.dataset.docId;
+            const type = target.dataset.type;
 
+            if (target.classList.contains('delete-btn') && docId) {
+                try {
                     if (type === 'collection') {
-                        collections.splice(index, 1);
-                        renderCollections();
+                        await deleteDoc(doc(collectionsRef, docId));
                     } else if (type === 'sponsor') {
-                        sponsors.splice(index, 1);
-                        renderSponsors();
+                        await deleteDoc(doc(sponsorsRef, docId));
                     } else if (type === 'expense') {
-                        expenses.splice(index, 1);
-                        renderExpenses();
+                        await deleteDoc(doc(expensesRef, docId));
                     }
-                    updateSummary();
-                } else if (target.classList.contains('edit-btn')) {
-                    const index = parseInt(target.dataset.index);
-                    const type = target.dataset.type;
-                    showEditModal(type, index);
+                } catch (e) {
+                    console.error("Error deleting document: ", e);
                 }
-            });
-            
-            // Handle saving changes from the edit modal
-            editForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const type = editTypeInput.value;
-                const index = parseInt(editIndexInput.value);
-                const nameOrItem = editNameInput.value;
+            } else if (target.classList.contains('edit-btn') && docId) {
+                showEditModal(type, docId);
+            }
+        });
+        
+        // Handle saving changes from the edit modal
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const type = editTypeInput.value;
+            const docId = editDocIdInput.value;
+            const nameOrItem = editNameInput.value;
 
+            if (!docId) {
+                console.error("No document ID provided for editing.");
+                return;
+            }
+
+            try {
                 if (type === 'collection') {
                     const amount = parseFloat(editDetailInput.value);
                     if (nameOrItem && amount > 0) {
-                        collections[index].name = nameOrItem;
-                        collections[index].amount = amount;
-                        renderCollections();
-                        updateSummary();
-                        hideEditModal();
+                        await updateDoc(doc(collectionsRef, docId), { name: nameOrItem, amount });
                     }
                 } else if (type === 'sponsor') {
                     const detail = editDetailInput.value;
                     if (nameOrItem && detail) {
-                        sponsors[index].name = nameOrItem;
-                        sponsors[index].detail = detail;
-                        renderSponsors();
-                        hideEditModal();
+                        await updateDoc(doc(sponsorsRef, docId), { name: nameOrItem, detail });
                     }
                 } else if (type === 'expense') {
                     const amount = parseFloat(editDetailInput.value);
                     if (nameOrItem && amount > 0) {
-                        expenses[index].item = nameOrItem;
-                        expenses[index].amount = amount;
-                        renderExpenses();
-                        updateSummary();
-                        hideEditModal();
+                        await updateDoc(doc(expensesRef, docId), { item: nameOrItem, amount });
                     }
                 }
-            });
+                hideEditModal();
+            } catch (e) {
+                console.error("Error updating document: ", e);
+            }
+        });
 
-            // Handle canceling the edit modal
-            cancelEditBtn.addEventListener('click', hideEditModal);
-            editModal.addEventListener('click', (e) => {
-                if (e.target === editModal) {
-                    hideEditModal();
-                }
-            });
-
-            // Initial render
-            renderCollections();
-            renderSponsors();
-            renderExpenses();
-            updateSummary();
+        // Handle canceling the edit modal
+        cancelEditBtn.addEventListener('click', hideEditModal);
+        editModal.addEventListener('click', (e) => {
+            if (e.target === editModal) {
+                hideEditModal();
+            }
         });
     </script>
 </body>
