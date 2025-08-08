@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ganesh Pooja Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f7fafc, #edf2f7); /* Light gradient background */
+        }
+        .container {
+            max-width: 1200px; /* Wider container for 3 columns */
+        }
+        .card {
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            border-radius: 1.5rem; /* More rounded corners */
+        }
+        .title-gradient {
+            background: linear-gradient(45deg, #d97706, #facc15, #ef4444); /* Saffron, Gold, and Red */
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            color: transparent;
+        }
+        .collection-gradient {
+            background: linear-gradient(45deg, #10b981, #34d399); /* Green */
+        }
+        .expense-gradient {
+            background: linear-gradient(45deg, #ef4444, #f87171); /* Red */
+        }
+        .balance-gradient {
+            background: linear-gradient(45deg, #3b82f6, #60a5fa); /* Blue */
+        }
+        .btn {
+            transition: transform 0.2s ease-in-out;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 4px 10px rgba(0,0,0,0.1);
+        }
+        input[type="text"], input[type="number"] {
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            transition: border-color 0.2s ease;
+        }
+        input[type="text"]:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #facc15;
+            box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.5);
+        }
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 0.5rem;
+        }
+        th, td {
+            padding: 1rem;
+            text-align: left;
+        }
+        tbody tr {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            transition: transform 0.1s ease-in-out;
+        }
+        tbody tr:hover {
+            transform: scale(1.01);
+        }
+        .delete-btn, .edit-btn {
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: color 0.2s;
+            margin-right: 0.5rem;
+        }
+        .delete-btn { color: #ef4444; }
+        .delete-btn:hover { color: #b91c1c; }
+        .edit-btn { color: #3b82f6; }
+        .edit-btn:hover { color: #1e40af; }
+
+        /* Modal specific styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            max-width: 90%;
+            width: 400px;
+        }
+    </style>
+</head>
+<body class="p-4 bg-gray-50 flex items-center justify-center min-h-screen">
+
+    <div class="container bg-white p-8 rounded-3xl shadow-xl space-y-8">
+        <!-- Header Section -->
+        <header class="text-center">
+            <h1 class="text-5xl font-extrabold mb-2 title-gradient">Ganesh Pooja Tracker 🙏</h1>
+        </header>
+
+        <!-- Summary Section -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+            <div class="card p-6 text-white collection-gradient">
+                <h2 class="text-xl font-bold">Total Collection</h2>
+                <p id="totalCollection" class="text-4xl font-extrabold mt-2">₹0</p>
+            </div>
+            <div class="card p-6 text-white expense-gradient">
+                <h2 class="text-xl font-bold">Total Expenses</h2>
+                <p id="totalExpenses" class="text-4xl font-extrabold mt-2">₹0</p>
+            </div>
+            <div class="card p-6 text-white balance-gradient">
+                <h2 class="text-xl font-bold">Balance</h2>
+                <p id="balance" class="text-4xl font-extrabold mt-2">₹0</p>
+            </div>
+        </section>
+        
+        <!-- Collections, Sponsors and Expense Forms & Tables -->
+        <main class="grid grid-cols-1 gap-8">
+            <!-- Collections Section -->
+            <div class="space-y-6">
+                <h3 class="text-3xl font-bold text-gray-800">Collections 💰</h3>
+                <!-- Add Collection Form -->
+                <form id="collectionForm" class="flex flex-col sm:flex-row gap-4 p-4 bg-yellow-50 rounded-2xl">
+                    <input type="text" id="collectionName" placeholder="Name" required class="flex-grow">
+                    <input type="number" id="collectionAmount" placeholder="Amount (₹)" required class="flex-grow">
+                    <button type="submit" class="btn px-6 py-3 font-semibold text-white bg-green-500 hover:bg-green-600 rounded-xl">Add Collection</button>
+                </form>
+                <!-- Collections Table -->
+                <div class="overflow-x-auto">
+                    <table id="collectionsTable">
+                        <thead>
+                            <tr class="text-gray-500 font-medium text-sm uppercase">
+                                <th class="py-2">Name</th>
+                                <th>Amount</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Collection rows will be dynamically inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Expenses Section -->
+            <div class="space-y-6">
+                <h3 class="text-3xl font-bold text-gray-800">Expenses 💸</h3>
+                <!-- Add Expense Form -->
+                <form id="expenseForm" class="flex flex-col sm:flex-row gap-4 p-4 bg-yellow-50 rounded-2xl">
+                    <input type="text" id="expenseItem" placeholder="Item" required class="flex-grow">
+                    <input type="number" id="expenseAmount" placeholder="Amount (₹)" required class="flex-grow">
+                    <button type="submit" class="btn px-6 py-3 font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl">Add Expense</button>
+                </form>
+                <!-- Expenses Table -->
+                <div class="overflow-x-auto">
+                    <table id="expensesTable">
+                        <thead>
+                            <tr class="text-gray-500 font-medium text-sm uppercase">
+                                <th class="py-2">Item</th>
+                                <th>Amount</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Expense rows will be dynamically inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sponsors Section -->
+            <div class="space-y-6">
+                <h3 class="text-3xl font-bold text-gray-800">Sponsors ✨</h3>
+                <!-- Add Sponsor Form -->
+                <form id="sponsorForm" class="flex flex-col sm:flex-row gap-4 p-4 bg-yellow-50 rounded-2xl">
+                    <input type="text" id="sponsorName" placeholder="Sponsor Name" required class="flex-grow">
+                    <input type="text" id="sponsorDetails" placeholder="Contribution Details" required class="flex-grow">
+                    <button type="submit" class="btn px-6 py-3 font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-xl">Add Sponsor</button>
+                </form>
+                <!-- Sponsors Table -->
+                <div class="overflow-x-auto">
+                    <table id="sponsorsTable">
+                        <thead>
+                            <tr class="text-gray-500 font-medium text-sm uppercase">
+                                <th class="py-2">Name</th>
+                                <th>Contribution Details</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Sponsor rows will be dynamically inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal-overlay">
+        <div class="modal-content text-center">
+            <h3 class="text-2xl font-bold mb-4">Edit Entry</h3>
+            <form id="editForm" class="space-y-4">
+                <input type="hidden" id="editType">
+                <input type="hidden" id="editIndex">
+                <!-- This input will be dynamic based on the type -->
+                <input type="text" id="editName" placeholder="Name/Item" required class="w-full">
+                <!-- This input will also be dynamic based on the type -->
+                <input type="text" id="editDetail" placeholder="Amount/Details" required class="w-full">
+                <div class="flex justify-end gap-4 mt-6">
+                    <button type="button" id="cancelEdit" class="btn px-6 py-2 font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-xl">Cancel</button>
+                    <button type="submit" class="btn px-6 py-2 font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-xl">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript for functionality -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- State variables for collections, sponsors, and expenses ---
+            let collections = [];
+            let sponsors = [];
+            let expenses = [];
+
+            // --- DOM Elements ---
+            const collectionForm = document.getElementById('collectionForm');
+            const collectionNameInput = document.getElementById('collectionName');
+            const collectionAmountInput = document.getElementById('collectionAmount');
+            const collectionsTableBody = document.querySelector('#collectionsTable tbody');
+
+            const sponsorForm = document.getElementById('sponsorForm');
+            const sponsorNameInput = document.getElementById('sponsorName');
+            const sponsorDetailsInput = document.getElementById('sponsorDetails'); // Updated ID
+            const sponsorsTableBody = document.querySelector('#sponsorsTable tbody');
+
+            const expenseForm = document.getElementById('expenseForm');
+            const expenseItemInput = document.getElementById('expenseItem');
+            const expenseAmountInput = document.getElementById('expenseAmount');
+            const expensesTableBody = document.querySelector('#expensesTable tbody');
+
+            const totalCollectionEl = document.getElementById('totalCollection');
+            const totalExpensesEl = document.getElementById('totalExpenses');
+            const balanceEl = document.getElementById('balance');
+
+            const editModal = document.getElementById('editModal');
+            const editForm = document.getElementById('editForm');
+            const editTypeInput = document.getElementById('editType');
+            const editIndexInput = document.getElementById('editIndex');
+            const editNameInput = document.getElementById('editName');
+            const editDetailInput = document.getElementById('editDetail'); // Updated ID
+            const cancelEditBtn = document.getElementById('cancelEdit');
+
+            // --- Functions to manage data and UI ---
+
+            /**
+             * Renders the collection items to the table.
+             */
+            const renderCollections = () => {
+                collectionsTableBody.innerHTML = ''; // Clear table
+                collections.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.name}</td>
+                        <td class="font-medium text-green-600">₹${item.amount.toLocaleString()}</td>
+                        <td>
+                            <button class="edit-btn" data-index="${index}" data-type="collection">✏️</button>
+                            <button class="delete-btn" data-index="${index}" data-type="collection">❌</button>
+                        </td>
+                    `;
+                    collectionsTableBody.appendChild(row);
+                });
+            };
+
+            /**
+             * Renders the sponsor items to the table.
+             */
+            const renderSponsors = () => {
+                sponsorsTableBody.innerHTML = ''; // Clear table
+                sponsors.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.name}</td>
+                        <td class="font-medium text-gray-800">${item.detail}</td>
+                        <td>
+                            <button class="edit-btn" data-index="${index}" data-type="sponsor">✏️</button>
+                            <button class="delete-btn" data-index="${index}" data-type="sponsor">❌</button>
+                        </td>
+                    `;
+                    sponsorsTableBody.appendChild(row);
+                });
+            };
+
+
+            /**
+             * Renders the expense items to the table.
+             */
+            const renderExpenses = () => {
+                expensesTableBody.innerHTML = ''; // Clear table
+                expenses.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.item}</td>
+                        <td class="font-medium text-red-600">₹${item.amount.toLocaleString()}</td>
+                        <td>
+                            <button class="edit-btn" data-index="${index}" data-type="expense">✏️</button>
+                            <button class="delete-btn" data-index="${index}" data-type="expense">❌</button>
+                        </td>
+                    `;
+                    expensesTableBody.appendChild(row);
+                });
+            };
+
+            /**
+             * Calculates and updates the summary totals (Collection, Expenses, Balance).
+             * NOTE: Sponsor amounts are no longer included in the calculation as they are now text.
+             */
+            const updateSummary = () => {
+                const totalCollections = collections.reduce((sum, item) => sum + item.amount, 0);
+                const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
+                const balance = totalCollections - totalExpenses;
+
+                totalCollectionEl.textContent = `₹${totalCollections.toLocaleString()}`;
+                totalExpensesEl.textContent = `₹${totalExpenses.toLocaleString()}`;
+                balanceEl.textContent = `₹${balance.toLocaleString()}`;
+            };
+
+            /**
+             * Shows the edit modal with pre-populated data.
+             * @param {string} type - 'collection', 'sponsor' or 'expense'
+             * @param {number} index - The index of the item to edit
+             */
+            const showEditModal = (type, index) => {
+                editTypeInput.value = type;
+                editIndexInput.value = index;
+                
+                let item;
+                if (type === 'collection') {
+                    item = collections[index];
+                    editNameInput.value = item.name;
+                    editDetailInput.value = item.amount;
+                    editDetailInput.type = "number"; // Set type for numerical input
+                    editDetailInput.placeholder = "Amount (₹)";
+                } else if (type === 'sponsor') {
+                    item = sponsors[index];
+                    editNameInput.value = item.name;
+                    editDetailInput.value = item.detail;
+                    editDetailInput.type = "text"; // Set type for text input
+                    editDetailInput.placeholder = "Contribution Details";
+                }
+                else {
+                    item = expenses[index];
+                    editNameInput.value = item.item;
+                    editDetailInput.value = item.amount;
+                    editDetailInput.type = "number"; // Set type for numerical input
+                    editDetailInput.placeholder = "Amount (₹)";
+                }
+                editModal.style.display = 'flex';
+            };
+
+            /**
+             * Hides the edit modal.
+             */
+            const hideEditModal = () => {
+                editModal.style.display = 'none';
+                editForm.reset();
+            };
+
+            // --- Event Listeners ---
+
+            // Handle adding a new collection entry
+            collectionForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = collectionNameInput.value;
+                const amount = parseFloat(collectionAmountInput.value);
+
+                if (name && amount > 0) {
+                    collections.push({ name, amount });
+                    collectionNameInput.value = '';
+                    collectionAmountInput.value = '';
+                    renderCollections();
+                    updateSummary();
+                }
+            });
+
+            // Handle adding a new sponsor entry
+            sponsorForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = sponsorNameInput.value;
+                const detail = sponsorDetailsInput.value;
+
+                if (name && detail) {
+                    sponsors.push({ name, detail });
+                    sponsorNameInput.value = '';
+                    sponsorDetailsInput.value = '';
+                    renderSponsors();
+                    updateSummary();
+                }
+            });
+
+            // Handle adding a new expense entry
+            expenseForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const item = expenseItemInput.value;
+                const amount = parseFloat(expenseAmountInput.value);
+
+                if (item && amount > 0) {
+                    expenses.push({ item, amount });
+                    expenseItemInput.value = '';
+                    expenseAmountInput.value = '';
+                    renderExpenses();
+                    updateSummary();
+                }
+            });
+            
+            // Handle deleting or editing an item from any table
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.classList.contains('delete-btn')) {
+                    const index = parseInt(target.dataset.index);
+                    const type = target.dataset.type;
+
+                    if (type === 'collection') {
+                        collections.splice(index, 1);
+                        renderCollections();
+                    } else if (type === 'sponsor') {
+                        sponsors.splice(index, 1);
+                        renderSponsors();
+                    } else if (type === 'expense') {
+                        expenses.splice(index, 1);
+                        renderExpenses();
+                    }
+                    updateSummary();
+                } else if (target.classList.contains('edit-btn')) {
+                    const index = parseInt(target.dataset.index);
+                    const type = target.dataset.type;
+                    showEditModal(type, index);
+                }
+            });
+            
+            // Handle saving changes from the edit modal
+            editForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const type = editTypeInput.value;
+                const index = parseInt(editIndexInput.value);
+                const nameOrItem = editNameInput.value;
+
+                if (type === 'collection') {
+                    const amount = parseFloat(editDetailInput.value);
+                    if (nameOrItem && amount > 0) {
+                        collections[index].name = nameOrItem;
+                        collections[index].amount = amount;
+                        renderCollections();
+                        updateSummary();
+                        hideEditModal();
+                    }
+                } else if (type === 'sponsor') {
+                    const detail = editDetailInput.value;
+                    if (nameOrItem && detail) {
+                        sponsors[index].name = nameOrItem;
+                        sponsors[index].detail = detail;
+                        renderSponsors();
+                        hideEditModal();
+                    }
+                } else if (type === 'expense') {
+                    const amount = parseFloat(editDetailInput.value);
+                    if (nameOrItem && amount > 0) {
+                        expenses[index].item = nameOrItem;
+                        expenses[index].amount = amount;
+                        renderExpenses();
+                        updateSummary();
+                        hideEditModal();
+                    }
+                }
+            });
+
+            // Handle canceling the edit modal
+            cancelEditBtn.addEventListener('click', hideEditModal);
+            editModal.addEventListener('click', (e) => {
+                if (e.target === editModal) {
+                    hideEditModal();
+                }
+            });
+
+            // Initial render
+            renderCollections();
+            renderSponsors();
+            renderExpenses();
+            updateSummary();
+        });
+    </script>
+</body>
+</html>
